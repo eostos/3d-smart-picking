@@ -1,0 +1,25 @@
+# SDK propietario (descargar por separado de vzense.com)
+ScepterSDK/
+ScepterGUITool/
+org.cloudcompare.CloudCompare.flatpakref
+
+# Capturas en tiempo de ejecución
+captures/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Logs del SDK
+.scepter_runtime_home/
+~/.config/Scepter/
+
+# Archivos temporales
+*.npz
+*.ply
+*.tmp
+.agents/
+.codex/
