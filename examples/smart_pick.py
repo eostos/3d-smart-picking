@@ -143,7 +143,7 @@ def main():
                             (0, 255, 0),
                             1,
                         )
-                        cv2.imshow("Smart Pick", display)
+                        cv2.imshow("BanaPick", display)
 
                     elif current_mode == "depth":
                         display = depth_preview(depth_mm)
@@ -156,7 +156,7 @@ def main():
                             (255, 255, 255),
                             1,
                         )
-                        cv2.imshow("Smart Pick", display)
+                        cv2.imshow("BanaPick", display)
 
                     elif current_mode == "cloud":
                         if cloud_process is None:
@@ -183,7 +183,7 @@ def main():
                             (0, 255, 255),
                             1,
                         )
-                        cv2.imshow("Smart Pick", display)
+                        cv2.imshow("BanaPick", display)
 
                     elif current_mode == "pick":
                         display = bgr.copy()
@@ -214,7 +214,7 @@ def main():
                             (0, 255, 0),
                             1,
                         )
-                        cv2.imshow("Smart Pick", display)
+                        cv2.imshow("BanaPick", display)
 
                 # En modo headless, no esperar por tecla de ventana
                 if args.headless:

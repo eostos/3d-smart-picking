@@ -1,12 +1,10 @@
-# 3D Smart Picking — Scepter ToF Camera + PyBullet
+# BanaPick — Industrial Robotic Smart Picking Platform
 
-Sistema de **detección 3D de objetos y simulación de pick robótico** usando una cámara ToF Scepter/Vzense sobre Jetson Orin (aarch64).
+Aplicación de escritorio GTK3 para una plataforma industrial de **banana hand smart picking** con cámara ToF Scepter/Vzense, panel de operador touchscreen para Jetson Orin NX, detección 3D y simulación de pick robótico.
 
 ```
-Cámara 3D → Detección por color → Posición XYZ → Simulación PyBullet
+BanaPick LIVE UI → Cámara 3D → Detección → Posición XYZ → Robot / PyBullet
 ```
-
-![Flujo general](docs/flow.png)
 
 ---
 
@@ -23,10 +21,19 @@ Cámara 3D → Detección por color → Posición XYZ → Simulación PyBullet
 ## Arquitectura del software
 
 ```
+BanaPick/
+  banapick.py              ← launcher oficial de la app de operador
+  banapick/
+    __main__.py            ← permite ejecutar: python3 -m banapick
+    ui/
+      live_panel.py        ← UI industrial LIVE: sidebar, cámara, flow, box, métricas
+  docs/
+    BANAPICK_LIVE_UI_SPEC.md  ← especificación del diseño industrial LIVE
+
 examples/
-  ball_viewer.py        ← Interfaz GTK3: RGB + Depth + nube 3D rotable
+  ball_viewer.py        ← herramienta legacy/técnica: cámara real RGB + Depth + nube 3D
   ball_sim.py           ← Simulación PyBullet (gripper pick)
-  smart_pick.py         ← Visor multi-modo (rgb/depth/cloud/pick)
+  smart_pick.py         ← herramienta legacy/técnica: visor multi-modo (rgb/depth/cloud/pick)
   robot_server.py       ← Simulador TCP del robot
   scepter_realtime_open3d.py  ← Nube de puntos en tiempo real
   picker/
@@ -34,6 +41,9 @@ examples/
     detect.py           ← RANSAC + DBSCAN: detección de objetos
     robot.py            ← MockRobot / TcpRobot (protocolo JSON)
 ```
+
+`banapick.py` es la app principal que debes abrir para ver el panel industrial BanaPick.  
+`examples/ball_viewer.py` y `examples/smart_pick.py` quedan como herramientas técnicas para cámara real, calibración, pruebas de nube 3D y robot.
 
 ### Por qué `PYTHONNOUSERSITE=1`
 
@@ -135,18 +145,68 @@ mkdir -p captures
 
 ## Uso
 
-### Visor principal (RGB + Depth + detección de pelota)
+### App principal BanaPick LIVE
 
 ```bash
-PYTHONNOUSERSITE=1 /usr/bin/python3 examples/ball_viewer.py 192.168.1.101
+cd /home/ebenezer/Documents/3d-camera
+PYTHONNOUSERSITE=1 /usr/bin/python3 banapick.py 192.168.1.101
 ```
 
-**Interfaz GTK3:**
+También puedes abrirlo como módulo:
+
+```bash
+PYTHONNOUSERSITE=1 /usr/bin/python3 -m banapick 192.168.1.101
+```
+
+Esta pantalla abre el panel industrial y conecta el LIVE tab con la cámara real. Si la cámara no está disponible, el panel muestra el error dentro del área de video.
+
+| Zona | Contenido |
+|---|---|
+| Sidebar | Live, Cameras, Calibration, Detection, Robot, Routing, Log / DB; cada pestaña cambia de vista |
+| Top bar | Logo BanaPick, estado RUNNING/STOPPED, E-STOP, Reconnect y hora actual |
+| Columna izquierda | Dos visores simultáneos: RGB real y Depth/3D; badges STEM UP / STEM DOWN |
+| Columna central | Modelo activo, parte objetivo y stepper operativo con done/active/alarm/idle |
+| Columna derecha | Box fill 4×3, contador 8 / 12, progreso y alerta |
+| Bottom bar | Throughput, grasp success rate y rejections today |
+
+**Controles LIVE principales:**
+
+| Acción | Cómo |
+|---|---|
+| Detener algoritmo y cámara | Botón `E-STOP` |
+| Volver a conectar después de E-STOP/error | Botón `Reconnect` |
+| Ver RGB y Depth juntos | Ambos visores están visibles en la columna izquierda |
+| Abrir nube 3D grande | Botón `Open 3D Large`; reemplaza los visores RGB/Depth por un solo feed 3D |
+| Volver a RGB + Depth | Botón `Back to RGB + Depth` |
+| Rotar nube 3D | Arrastra con mouse sobre el feed 3D grande |
+| Zoom nube 3D | Rueda del mouse sobre el feed 3D grande |
+| Graduar cantidad de puntos | Slider `Points` bajo el feed, de 30k a 500k puntos |
+| Medir un pixel | Click en RGB o Depth |
+
+**Referencia de altura/XYZ:**
+
+Al hacer click, BanaPick muestra `X/Y/Z` en milímetros usando el frame de la cámara ToF:
+
+| Valor | Referencia |
+|---|---|
+| `X` | desplazamiento lateral respecto al centro óptico |
+| `Y` | altura en el frame de cámara respecto al centro óptico |
+| `Z` | distancia/profundidad desde el sensor ToF hacia el objeto |
+
+El dashboard muestra el modelo activo (`banana-hand-pose-v1`) y la parte objetivo (`crown point + tip point + stem orientation`).
+
+### Herramienta técnica RGB + Depth + 3D
+
+`examples/ball_viewer.py` queda como visor de diagnóstico separado para probar cámara, depth, nube 3D, clicks XYZ y simulación PyBullet.
 
 | Panel izquierdo | Panel derecho |
 |---|---|
 | Imagen RGB con overlay de detección | Depth colormap (rojo=cerca, azul=lejos) |
 | Medidas reales: ancho y alto en mm | Vista 3D rotable (botón "Cambiar a 3D") |
+
+```bash
+PYTHONNOUSERSITE=1 /usr/bin/python3 examples/ball_viewer.py 192.168.1.101
+```
 
 **Controles:**
 
@@ -159,6 +219,12 @@ PYTHONNOUSERSITE=1 /usr/bin/python3 examples/ball_viewer.py 192.168.1.101
 | Verificar alineación RGB↔Depth | Click en panel RGB |
 | Simular pick en PyBullet | Botón "Simular Pick" (activo al detectar objeto) |
 | Guardar captura PNG | Botón "Guardar" |
+
+**Densidad de la nube 3D:**
+
+En `examples/ball_viewer.py`, ajusta `CloudRenderer.MAX_PTS` para permitir más puntos y `CloudRenderer.POINT_RADIUS` para engrosar cada punto. El valor actual usa `300_000` puntos máximos y radio `1` (bloques 3x3 px).
+
+Para presentación con cliente, usa `Open 3D Large` y sube `Points` a `500k`. Ese es el techo útil para un depth 800x600, porque la cámara solo puede aportar hasta ~480k puntos antes de filtrar inválidos. Si el depth es 640x480, el techo real ronda ~307k puntos.
 
 ### Simulación pick directa (sin GUI de cámara)
 

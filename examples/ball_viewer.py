@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ball_viewer.py  —  GTK3: RGB (izq) + Depth/Cloud (der), detección pelota naranja.
+BanaPick Camera — GTK3 industrial UI: RGB + Depth/Cloud, detección pelota naranja.
 
 Ejecutar:
   PYTHONNOUSERSITE=1 /usr/bin/python3 examples/ball_viewer.py [IP]
@@ -20,7 +20,7 @@ if not os.environ.get("SCEPTER_ALLOW_USER_SITE"):
 
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib, GdkPixbuf, Gdk
+from gi.repository import Gtk, GLib, GdkPixbuf, Gdk, Pango
 
 import cv2
 import numpy as np
@@ -30,10 +30,210 @@ ROOT  = _HERE.parents[1]
 sys.path.insert(0, str(_HERE.parent))
 from picker.camera import ScepterCamera
 
+APP_NAME = "BanaPick Camera"
+APP_CELL = "VISION CELL A-03"
+
+THEME_CSS = b"""
+* {
+    font-family: "Inter", "Cantarell", "Ubuntu", sans-serif;
+}
+
+.app-bg {
+    background-color: #0A0D12;
+}
+
+.topbar {
+    background-color: #0E1218;
+    border-bottom: 1px solid #1C232D;
+}
+
+.brand-main {
+    color: #E6EAF0;
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.brand-accent {
+    color: #3BD89C;
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.cell-id {
+    color: #6B7585;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.run-pill {
+    background-color: #10271E;
+    border: 1px solid #1D9E75;
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: #3BD89C;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.ip-pill,
+.time-pill {
+    background-color: #13191F;
+    border: 1px solid #232C37;
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: #C7CFDA;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.time-pill {
+    font-family: monospace;
+    font-size: 15px;
+}
+
+.commandbar {
+    background-color: #0B0F14;
+    border-bottom: 1px solid #18212A;
+}
+
+.industrial-button {
+    background-color: #13191F;
+    border: 1px solid #2E3946;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #C7CFDA;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.industrial-button:hover {
+    background-color: #182029;
+}
+
+.industrial-button:disabled {
+    color: #566171;
+    border-color: #1D2630;
+    background-color: #10151B;
+}
+
+.primary-button {
+    background-color: #10271E;
+    border: 1px solid #1D9E75;
+    color: #3BD89C;
+}
+
+.danger-button {
+    background-color: #2A1011;
+    border: 1px solid #DC2626;
+    color: #F0726A;
+}
+
+.danger-button:hover {
+    background-color: #3A1416;
+}
+
+.viewport-card,
+.status-card {
+    background-color: #0E1218;
+    border: 1px solid #1C232D;
+    border-radius: 10px;
+}
+
+.viewport-frame {
+    background-color: #0C0F14;
+    border: 1px solid #232C37;
+    border-radius: 8px;
+}
+
+.panel-title {
+    color: #C7CFDA;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.panel-meta {
+    color: #6B7585;
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.panel-badge {
+    background-color: #10271E;
+    border: 1px solid #1D9E75;
+    border-radius: 6px;
+    padding: 4px 9px;
+    color: #3BD89C;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.status-title {
+    color: #9AA4B2;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.status-primary {
+    color: #E6EAF0;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.status-secondary {
+    color: #8A94A3;
+    font-size: 12px;
+}
+"""
+
+CV_TEAL = (156, 216, 59)
+CV_TEAL_DARK = (117, 158, 29)
+CV_AMBER = (61, 163, 224)
+CV_BLUE = (255, 128, 58)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # UTILIDADES DE IMAGEN
 # ═══════════════════════════════════════════════════════════════════════
+
+def install_theme():
+    provider = Gtk.CssProvider()
+    provider.load_from_data(THEME_CSS)
+    screen = Gdk.Screen.get_default()
+    if screen is not None:
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+
+def add_classes(widget, *classes):
+    ctx = widget.get_style_context()
+    for css_class in classes:
+        if css_class:
+            for name in css_class.split():
+                ctx.add_class(name)
+    return widget
+
+
+def ui_label(text, css=None, xalign=0.0):
+    widget = Gtk.Label(label=text, xalign=xalign)
+    widget.set_ellipsize(Pango.EllipsizeMode.END)
+    if css:
+        add_classes(widget, css)
+    return widget
+
+
+def icon_button(label, icon_name, *classes):
+    button = Gtk.Button.new_with_label(label)
+    image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
+    image.set_pixel_size(18)
+    button.set_image(image)
+    button.set_image_position(Gtk.PositionType.LEFT)
+    button.set_always_show_image(True)
+    button.set_relief(Gtk.ReliefStyle.NONE)
+    add_classes(button, "industrial-button", *classes)
+    return button
+
 
 def bgr_to_pixbuf(bgr: np.ndarray) -> GdkPixbuf.Pixbuf:
     """
@@ -102,9 +302,10 @@ class CloudRenderer:
     - Drag   → rotar (azimuth / elevation)
     - Scroll → zoom
     - Color  → temperatura por distancia al sensor (rojo=cerca, azul=lejos)
-    - Puntos → dibujados en bloques 3×3 px para mayor densidad visual
+    - Puntos → dibujados en bloques configurables para mayor densidad visual
     """
-    MAX_PTS = 50_000
+    MAX_PTS = 300_000
+    POINT_RADIUS = 1
 
     def __init__(self, w=800, h=600):
         self.W, self.H   = w, h
@@ -132,8 +333,9 @@ class CloudRenderer:
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, (120, 120, 120), 2)
             return img
 
-        # Submuestrear uniformemente
-        step = max(1, len(pts) // self.MAX_PTS)
+        # Submuestrear uniformemente, manteniendo una nube más densa sin
+        # bloquear la UI cuando la cámara entrega cientos de miles de puntos.
+        step = max(1, (len(pts) + self.MAX_PTS - 1) // self.MAX_PTS)
         pts  = pts[::step]
 
         # ── Rotación ────────────────────────────────────────────────────────
@@ -149,7 +351,7 @@ class CloudRenderer:
 
         # ── Escala ──────────────────────────────────────────────────────────
         if self._scale_base is None:
-            span = max(rot[:, 0].ptp(), rot[:, 1].ptp(), 1.0)
+            span = max(float(np.ptp(rot[:, 0])), float(np.ptp(rot[:, 1])), 1.0)
             self._scale_base = min(self.W, self.H) * 0.65 / span
 
         scale = self._scale_base * self._zoom
@@ -163,22 +365,29 @@ class CloudRenderer:
         # Invertimos: valor alto = cerca = rojo en JET
         zn = (255 - ((z_real - z_near) / max(z_far - z_near, 1) * 255)).astype(np.uint8)
         colors = cv2.applyColorMap(zn.reshape(-1, 1), cv2.COLORMAP_JET).reshape(-1, 3)
+        relief = (rot[:, 2] - rot[:, 2].min()) / max(float(np.ptp(rot[:, 2])), 1.0)
+        shade = (0.72 + 0.38 * (1.0 - relief)).clip(0.55, 1.15).reshape(-1, 1)
+        colors = np.clip(colors.astype(np.float32) * shade, 0, 255).astype(np.uint8)
 
         # ── Painter's: de lejos a cerca ──────────────────────────────────────
         order = np.argsort(rot[:, 2])[::-1]
         sx, sy, colors = sx[order], sy[order], colors[order]
 
-        # ── Dibujar bloques 3×3 px para mayor densidad ───────────────────────
-        for dy in (-1, 0, 1):
-            for dx in (-1, 0, 1):
+        # ── Dibujar bloques para mayor densidad ─────────────────────────────
+        radius = max(0, int(self.POINT_RADIUS))
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
                 yy = sy + dy
                 xx = sx + dx
                 ok = (xx >= 0) & (xx < self.W) & (yy >= 0) & (yy < self.H)
                 img[yy[ok], xx[ok]] = colors[ok]
 
         # ── Barra de temperatura (leyenda) ───────────────────────────────────
-        bar_x, bar_y, bar_w, bar_h = self.W - 28, 40, 14, 160
-        bar = np.arange(255, -1, -255 / bar_h, dtype=np.uint8)[:bar_h]
+        bar_w = 14
+        bar_h = max(40, min(160, self.H - 64))
+        bar_x = max(8, self.W - 28)
+        bar_y = min(40, max(0, self.H - bar_h - 22))
+        bar = np.linspace(255, 0, bar_h, dtype=np.uint8)
         bar_rgb = cv2.applyColorMap(bar.reshape(-1, 1), cv2.COLORMAP_JET).reshape(bar_h, 1, 3)
         img[bar_y:bar_y+bar_h, bar_x:bar_x+bar_w] = np.repeat(bar_rgb, bar_w, axis=1)
         cv2.rectangle(img, (bar_x-1, bar_y-1), (bar_x+bar_w, bar_y+bar_h), (180,180,180), 1)
@@ -300,47 +509,47 @@ def draw_ball_rgb(img, ball):
     wm, hm = ball["width_mm"], ball["height_mm"]
     xyz    = ball["xyz"]
 
-    cv2.circle(img, (cx, cy), r, (0, 165, 255), 2)
-    cv2.circle(img, (cx, cy), 4, (0, 255, 255), -1)
-    cv2.line(img, (cx-14, cy), (cx+14, cy), (0, 255, 255), 1)
-    cv2.line(img, (cx, cy-14), (cx, cy+14), (0, 255, 255), 1)
+    cv2.circle(img, (cx, cy), r, CV_TEAL, 2)
+    cv2.circle(img, (cx, cy), 4, CV_AMBER, -1)
+    cv2.line(img, (cx-14, cy), (cx+14, cy), CV_AMBER, 1)
+    cv2.line(img, (cx, cy-14), (cx, cy+14), CV_AMBER, 1)
 
-    cv2.arrowedLine(img, (cx-r, cy-2), (cx+r, cy-2), (0, 180, 255), 1, tipLength=0.08)
-    cv2.arrowedLine(img, (cx+r, cy-2), (cx-r, cy-2), (0, 180, 255), 1, tipLength=0.08)
-    cv2.arrowedLine(img, (cx+2, cy-r), (cx+2, cy+r), (0, 180, 255), 1, tipLength=0.08)
-    cv2.arrowedLine(img, (cx+2, cy+r), (cx+2, cy-r), (0, 180, 255), 1, tipLength=0.08)
+    cv2.arrowedLine(img, (cx-r, cy-2), (cx+r, cy-2), CV_TEAL, 1, tipLength=0.08)
+    cv2.arrowedLine(img, (cx+r, cy-2), (cx-r, cy-2), CV_TEAL, 1, tipLength=0.08)
+    cv2.arrowedLine(img, (cx+2, cy-r), (cx+2, cy+r), CV_TEAL, 1, tipLength=0.08)
+    cv2.arrowedLine(img, (cx+2, cy+r), (cx+2, cy-r), CV_TEAL, 1, tipLength=0.08)
 
     y0 = max(cy - r - 36, 52)
     if xyz is not None:
         cv2.putText(img, f"x={xyz[0]:.0f} y={xyz[1]:.0f} z={xyz[2]:.0f} mm",
-                    (cx-100, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (0, 255, 255), 1)
+                    (cx-100, y0), cv2.FONT_HERSHEY_SIMPLEX, 0.46, CV_TEAL, 1)
     w_s = f"{wm:.0f}" if wm else "---"
     h_s = f"{hm:.0f}" if hm else "---"
     cv2.putText(img, f"ancho={w_s}mm  alto={h_s}mm",
-                (cx-80, y0+18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (50, 255, 180), 1)
+                (cx-80, y0+18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, CV_TEAL, 1)
     if wm:
         cv2.putText(img, f"{wm:.0f}mm", (cx-18, cy-6),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 200, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, CV_AMBER, 1)
     if hm:
         cv2.putText(img, f"{hm:.0f}mm", (cx+7,  cy+5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 200, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, CV_AMBER, 1)
 
 
 def draw_ball_depth(img, ball):
     if not ball:
         return
     cx, cy, r = ball["cx"], ball["cy"], ball["radius"]
-    cv2.circle(img, (cx, cy), r, (255, 255, 255), 2)
-    cv2.circle(img, (cx, cy), 4, (255, 255, 255), -1)
+    cv2.circle(img, (cx, cy), r, CV_TEAL, 2)
+    cv2.circle(img, (cx, cy), 4, CV_AMBER, -1)
     xyz = ball["xyz"]
     if xyz is not None:
         cv2.putText(img, f"z={xyz[2]:.0f}mm",
-                    (cx-35, cy-r-8), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (255, 255, 255), 1)
+                    (cx-35, cy-r-8), cv2.FONT_HERSHEY_SIMPLEX, 0.46, CV_TEAL, 1)
     wm, hm = ball["width_mm"], ball["height_mm"]
     w_s = f"{wm:.0f}" if wm else "---"
     h_s = f"{hm:.0f}" if hm else "---"
     cv2.putText(img, f"W:{w_s} H:{h_s}mm",
-                (cx-50, cy-r+10), cv2.FONT_HERSHEY_SIMPLEX, 0.46, (200, 255, 200), 1)
+                (cx-50, cy-r+10), cv2.FONT_HERSHEY_SIMPLEX, 0.46, CV_TEAL, 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -353,9 +562,11 @@ class BallViewerWindow(Gtk.Window):
     MODE_CLOUD = "cloud"
 
     def __init__(self, ip):
-        super().__init__(title="Ball Viewer  —  RGB + Depth 3D")
+        super().__init__(title=APP_NAME)
         self.ip = ip
-        self.set_default_size(1640, 680)
+        self.set_default_size(1720, 900)
+        self.set_size_request(1120, 680)
+        add_classes(self, "app-bg")
         self.connect("destroy", self._quit)
 
         # ── Estado compartido (protegido por lock) ──────────────────────────
@@ -385,30 +596,46 @@ class BallViewerWindow(Gtk.Window):
         self._rgb_click_xyz = None   # xyz del mismo pixel en depth map
 
         self._running    = True
+        self._clock_label = None
+        self._mode_label = None
 
         # ── Construir UI ────────────────────────────────────────────────────
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.add(vbox)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        add_classes(root, "app-bg")
+        self.add(root)
 
-        vbox.pack_start(self._build_toolbar(), False, False, 0)
+        root.pack_start(self._build_topbar(), False, False, 0)
+        root.pack_start(self._build_toolbar(), False, False, 0)
 
         # Dos drawing areas lado a lado
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        hbox.set_margin_start(4); hbox.set_margin_end(4)
-        hbox.set_margin_top(4);   hbox.set_margin_bottom(4)
-        vbox.pack_start(hbox, True, True, 0)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        hbox.set_margin_start(14); hbox.set_margin_end(14)
+        hbox.set_margin_top(14);   hbox.set_margin_bottom(12)
+        root.pack_start(hbox, True, True, 0)
 
         # Panel izquierdo: RGB (con click para alineación)
         self._da_rgb = Gtk.DrawingArea()
         self._da_rgb.set_size_request(800, 600)
+        self._da_rgb.set_hexpand(True)
+        self._da_rgb.set_vexpand(True)
         self._da_rgb.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
         self._da_rgb.connect("draw",               self._draw_rgb)
         self._da_rgb.connect("button-press-event", self._on_rgb_click)
-        hbox.pack_start(self._da_rgb, True, True, 0)
+        hbox.pack_start(
+            self._viewport_card(
+                "PICK CAM",
+                "RGB · DETECCION · CLICK=ALINEAR",
+                "30 FPS",
+                self._da_rgb,
+            ),
+            True, True, 0
+        )
 
         # Panel derecho: Depth / Cloud
         self._da_right = Gtk.DrawingArea()
         self._da_right.set_size_request(800, 600)
+        self._da_right.set_hexpand(True)
+        self._da_right.set_vexpand(True)
         self._da_right.add_events(
             Gdk.EventMask.BUTTON_PRESS_MASK   |
             Gdk.EventMask.BUTTON_RELEASE_MASK |
@@ -421,20 +648,18 @@ class BallViewerWindow(Gtk.Window):
         self._da_right.connect("button-release-event", self._on_right_release)
         self._da_right.connect("motion-notify-event",  self._on_right_motion)
         self._da_right.connect("scroll-event",         self._on_scroll)
-        hbox.pack_start(self._da_right, True, True, 0)
+        hbox.pack_start(
+            self._viewport_card(
+                "DEPTH / 3D CLOUD",
+                "XYZ · DRAG/ZOOM EN MODO 3D",
+                "LIVE",
+                self._da_right,
+            ),
+            True, True, 0
+        )
 
         # Barra de estado
-        self._lbl_status = Gtk.Label(label="Conectando a cámara...")
-        self._lbl_status.set_xalign(0)
-        self._lbl_status.set_margin_start(8)
-        self._lbl_status.set_margin_bottom(2)
-        vbox.pack_start(self._lbl_status, False, False, 0)
-
-        self._lbl_coords = Gtk.Label(label="")
-        self._lbl_coords.set_xalign(0)
-        self._lbl_coords.set_margin_start(8)
-        self._lbl_coords.set_margin_bottom(6)
-        vbox.pack_start(self._lbl_coords, False, False, 0)
+        root.pack_start(self._build_status_bar(), False, False, 0)
 
         self.show_all()
 
@@ -444,46 +669,132 @@ class BallViewerWindow(Gtk.Window):
         # Hilo de cámara
         threading.Thread(target=self._camera_loop, daemon=True).start()
 
+    # ── Chrome industrial ───────────────────────────────────────────────────
+
+    def _build_topbar(self):
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        add_classes(bar, "topbar")
+        bar.set_size_request(-1, 74)
+        bar.set_border_width(14)
+
+        brand = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        brand.set_valign(Gtk.Align.CENTER)
+        brand_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        brand_row.pack_start(ui_label("Bana", "brand-main"), False, False, 0)
+        brand_row.pack_start(ui_label("Pick", "brand-accent"), False, False, 0)
+        brand.pack_start(brand_row, False, False, 0)
+        brand.pack_start(ui_label(APP_CELL, "cell-id"), False, False, 0)
+        bar.pack_start(brand, False, False, 4)
+
+        run = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        add_classes(run, "run-pill")
+        run.set_valign(Gtk.Align.CENTER)
+        run.pack_start(ui_label("●"), False, False, 0)
+        run.pack_start(ui_label("RUNNING"), False, False, 0)
+        bar.pack_start(run, False, False, 0)
+
+        ip_label = ui_label(f"CAM IP {self.ip}", "ip-pill")
+        ip_label.set_valign(Gtk.Align.CENTER)
+        bar.pack_start(ip_label, False, False, 0)
+
+        bar.pack_start(Gtk.Box(), True, True, 0)
+
+        self._clock_label = ui_label(time.strftime("%H:%M:%S"), "time-pill")
+        self._clock_label.set_valign(Gtk.Align.CENTER)
+        bar.pack_start(self._clock_label, False, False, 0)
+
+        estop = icon_button("E-STOP", "process-stop-symbolic", "danger-button")
+        estop.set_valign(Gtk.Align.CENTER)
+        estop.connect("clicked", lambda *_: self._quit())
+        bar.pack_start(estop, False, False, 0)
+        return bar
+
+    def _viewport_card(self, title, meta, badge, child):
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        add_classes(card, "viewport-card")
+        card.set_border_width(12)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        title_box.pack_start(ui_label(title, "panel-title"), False, False, 0)
+        title_box.pack_start(ui_label(meta, "panel-meta"), False, False, 0)
+        header.pack_start(title_box, True, True, 0)
+        header.pack_start(ui_label(badge, "panel-badge"), False, False, 0)
+        card.pack_start(header, False, False, 0)
+
+        frame = Gtk.Box()
+        add_classes(frame, "viewport-frame")
+        frame.set_border_width(1)
+        frame.pack_start(child, True, True, 0)
+        card.pack_start(frame, True, True, 0)
+        return card
+
+    def _build_status_bar(self):
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        bar.set_margin_start(14)
+        bar.set_margin_end(14)
+        bar.set_margin_bottom(14)
+
+        self._lbl_status = ui_label("Conectando a cámara...", "status-primary")
+        self._lbl_status.set_line_wrap(True)
+        status = self._status_card("SYSTEM STATUS", self._lbl_status)
+        bar.pack_start(status, True, True, 0)
+
+        self._lbl_coords = ui_label("Sin seleccion", "status-secondary")
+        self._lbl_coords.set_line_wrap(True)
+        coords = self._status_card("PIXEL / XYZ", self._lbl_coords)
+        bar.pack_start(coords, True, True, 0)
+
+        mode = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        add_classes(mode, "status-card")
+        mode.set_border_width(10)
+        mode.set_size_request(150, -1)
+        mode.pack_start(ui_label("VIEW MODE", "status-title"), False, False, 0)
+        self._mode_label = ui_label("DEPTH", "panel-badge")
+        mode.pack_start(self._mode_label, False, False, 0)
+        bar.pack_start(mode, False, False, 0)
+        return bar
+
+    def _status_card(self, title, body):
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        add_classes(card, "status-card")
+        card.set_border_width(10)
+        card.pack_start(ui_label(title, "status-title"), False, False, 0)
+        card.pack_start(body, False, False, 0)
+        return card
+
     # ── Toolbar ─────────────────────────────────────────────────────────────
 
     def _build_toolbar(self):
-        bar = Gtk.Toolbar()
-        bar.get_style_context().add_class(Gtk.STYLE_CLASS_PRIMARY_TOOLBAR)
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        add_classes(bar, "commandbar")
+        bar.set_border_width(12)
 
-        self._btn_mode = Gtk.ToolButton()
-        self._btn_mode.set_label("Cambiar a 3D")
-        self._btn_mode.set_icon_name("applications-graphics")
-        self._btn_mode.set_is_important(True)
+        self._btn_mode = icon_button(
+            "Cambiar a 3D",
+            "applications-graphics-symbolic",
+            "primary-button",
+        )
         self._btn_mode.connect("clicked", self._toggle_mode)
-        bar.insert(self._btn_mode, 0)
+        bar.pack_start(self._btn_mode, False, False, 0)
 
-        bar.insert(Gtk.SeparatorToolItem(), 1)
-
-        self._btn_sim = Gtk.ToolButton()
-        self._btn_sim.set_label("Simular Pick")
-        self._btn_sim.set_icon_name("media-playback-start")
-        self._btn_sim.set_is_important(True)
+        self._btn_sim = icon_button(
+            "Simular Pick",
+            "media-playback-start-symbolic",
+        )
         self._btn_sim.set_sensitive(False)   # activar solo cuando hay pelota
         self._btn_sim.connect("clicked", self._on_simulate)
-        bar.insert(self._btn_sim, 2)
+        bar.pack_start(self._btn_sim, False, False, 0)
 
-        bar.insert(Gtk.SeparatorToolItem(), 3)
-
-        btn_save = Gtk.ToolButton()
-        btn_save.set_label("Guardar")
-        btn_save.set_icon_name("document-save")
-        btn_save.set_is_important(True)
+        btn_save = icon_button("Guardar", "document-save-symbolic")
         btn_save.connect("clicked", self._on_save)
-        bar.insert(btn_save, 4)
+        bar.pack_start(btn_save, False, False, 0)
 
-        bar.insert(Gtk.SeparatorToolItem(), 5)
+        bar.pack_start(Gtk.Box(), True, True, 0)
 
-        btn_quit = Gtk.ToolButton()
-        btn_quit.set_label("Salir")
-        btn_quit.set_icon_name("application-exit")
-        btn_quit.set_is_important(True)
+        btn_quit = icon_button("Salir", "application-exit-symbolic")
         btn_quit.connect("clicked", lambda *_: self._quit())
-        bar.insert(btn_quit, 6)
+        bar.pack_start(btn_quit, False, False, 0)
 
         return bar
 
@@ -494,10 +805,15 @@ class BallViewerWindow(Gtk.Window):
             self._mode = self.MODE_CLOUD
             self._cloud.reset_scale()
             self._btn_mode.set_label("Cambiar a Depth")
+            if self._mode_label is not None:
+                self._mode_label.set_text("3D CLOUD")
         else:
             self._mode = self.MODE_DEPTH
             self._btn_mode.set_label("Cambiar a 3D")
-        self._click_px = None   # limpiar click anterior
+            if self._mode_label is not None:
+                self._mode_label.set_text("DEPTH")
+        self._depth_click_px = None
+        self._depth_click_xyz = None
 
     # ── Draw callbacks ───────────────────────────────────────────────────────
 
@@ -518,15 +834,15 @@ class BallViewerWindow(Gtk.Window):
         # Crosshair del punto clickeado en RGB
         if clk_px is not None:
             px, py = clk_px
-            cv2.drawMarker(img, (px, py), (255, 80, 0), cv2.MARKER_CROSS, 26, 2)
+            cv2.drawMarker(img, (px, py), CV_BLUE, cv2.MARKER_CROSS, 26, 2)
             # Cuadrado de color muestreado
             if clk_bgr is not None:
                 b, g, r = int(clk_bgr[0]), int(clk_bgr[1]), int(clk_bgr[2])
                 cv2.rectangle(img, (px+14, py-14), (px+30, py+2), (b,g,r), -1)
                 cv2.rectangle(img, (px+14, py-14), (px+30, py+2), (255,255,255), 1)
 
-        cv2.putText(img, f"RGB  {fps}fps  [click=alinear]", (10, 26),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(img, f"PICK CAM RGB  {fps}fps  [click=alinear]", (10, 26),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.58, CV_TEAL, 2)
 
         pb = bgr_to_pixbuf(img)
         wa = widget.get_allocated_width()
@@ -551,31 +867,31 @@ class BallViewerWindow(Gtk.Window):
 
         if mode == self.MODE_DEPTH:
             draw_ball_depth(img, ball)
-            cv2.putText(img, "Depth  [click=XYZ]", (10, 26),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            cv2.putText(img, "DEPTH MAP  [click=XYZ]", (10, 26),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.58, CV_TEAL, 2)
 
             # Punto clickeado en depth
             if dclk_px is not None:
                 px, py = dclk_px
-                cv2.drawMarker(img, (px, py), (0, 255, 0), cv2.MARKER_CROSS, 22, 2)
+                cv2.drawMarker(img, (px, py), CV_TEAL, cv2.MARKER_CROSS, 22, 2)
                 if dclk_xyz is not None:
                     lbl = f"x={dclk_xyz[0]:.0f} y={dclk_xyz[1]:.0f} z={dclk_xyz[2]:.0f}mm"
                     (tw, th), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
                     bx = min(px+10, img.shape[1]-tw-6); by = max(py-10, th+6)
                     cv2.rectangle(img, (bx-2, by-th-2), (bx+tw+2, by+2), (0,0,0), -1)
-                    cv2.putText(img, lbl, (bx, by), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (0,255,0), 1)
+                    cv2.putText(img, lbl, (bx, by), cv2.FONT_HERSHEY_SIMPLEX, 0.48, CV_TEAL, 1)
 
             # Crosshair del click RGB → mismo pixel en depth (alineación)
             if rclk_px is not None:
                 px, py = rclk_px
-                cv2.drawMarker(img, (px, py), (255, 80, 0), cv2.MARKER_TILTED_CROSS, 26, 2)
+                cv2.drawMarker(img, (px, py), CV_BLUE, cv2.MARKER_TILTED_CROSS, 26, 2)
                 if rclk_xyz is not None:
                     lbl = f"[RGB→] z={rclk_xyz[2]:.0f}mm"
                     cv2.putText(img, lbl, (px+14, py-6),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.44, (255, 120, 0), 1)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.44, CV_BLUE, 1)
         else:
-            cv2.putText(img, "3D Cloud  [drag=rotar  scroll=zoom]", (10, 70),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+            cv2.putText(img, "3D CLOUD  [drag=rotar  scroll=zoom]", (10, 70),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, CV_TEAL, 1)
 
         pb = bgr_to_pixbuf(img)
         wa = widget.get_allocated_width()
@@ -689,6 +1005,8 @@ class BallViewerWindow(Gtk.Window):
 
     def _tick(self):
         """Refresca ambos panels a 30fps desde el hilo GTK."""
+        if self._clock_label is not None:
+            self._clock_label.set_text(time.strftime("%H:%M:%S"))
         self._da_rgb.queue_draw()
         self._da_right.queue_draw()
         return self._running   # False detiene el timer
@@ -851,6 +1169,7 @@ class BallViewerWindow(Gtk.Window):
 
 def main():
     ip = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.101"
+    install_theme()
     BallViewerWindow(ip)
     Gtk.main()
 
