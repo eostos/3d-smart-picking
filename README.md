@@ -54,18 +54,21 @@ git clone https://github.com/eostos/3d-smart-picking.git
 cd 3d-smart-picking
 ```
 
-### 2. Descargar el SDK de Scepter/Vzense
-
-Descarga el SDK desde [vzense.com/download](https://www.vzense.com/download) (requiere registro).  
-Descomprime dentro de la carpeta del proyecto:
+### 2. Clonar el SDK de Scepter (GitHub público, sin registro)
 
 ```bash
-# Estructura esperada después de descomprimir:
+# Dentro de la carpeta del proyecto:
+git clone https://github.com/ScepterSW/ScepterSDK.git
+```
+
+La estructura resultante debe ser:
+
+```
 3d-smart-picking/
   ScepterSDK/
     BaseSDK/
-      AArch64/Lib/          ← libScepter_api.so (para Jetson)
-      Ubuntu/Lib/           ← libScepter_api.so (para x86-64)
+      AArch64/Lib/          ← libScepter_api.so  (Jetson / aarch64)
+      Ubuntu/Lib/           ← libScepter_api.so  (PC x86-64)
     MultilanguageSDK/
       Python/
         API/
@@ -73,8 +76,12 @@ Descomprime dentro de la carpeta del proyecto:
           ScepterDS_enums.py
 ```
 
-> Para x86-64 (PC Ubuntu normal) usa `Ubuntu/Lib/` en lugar de `AArch64/Lib/`.  
-> Edita `examples/picker/camera.py` línea `ROOT / "ScepterSDK" / "BaseSDK" / "AArch64"` si cambias de arquitectura.
+> **Jetson Orin / aarch64** → usa `AArch64/Lib/` (ya configurado en `picker/camera.py`).  
+> **PC Ubuntu x86-64** → cambia la línea en `camera.py`:  
+> `"AArch64"` → `"Ubuntu"`
+
+Documentación oficial: https://wiki.vzense.com  
+Código fuente SDK: https://github.com/ScepterSW
 
 ### 3. Instalar dependencias del sistema
 
