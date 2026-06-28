@@ -1,1 +1,1 @@
-"""GTK3 UI modules for BanaPick."""
+"""GTK3 UI modules for Ebzer AI."""

@@ -1,4 +1,4 @@
-"""Run BanaPick with `python3 -m banapick`."""
+"""Run Ebzer AI with `python3 -m banapick`."""
 
 from banapick.ui.live_panel import main
 

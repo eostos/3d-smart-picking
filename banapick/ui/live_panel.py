@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BanaPick — Live operator panel (GTK3 / PyGObject)
-Industrial robotic banana-hand smart picking platform.
+Ebzer AI — Live operator panel (GTK3 / PyGObject)
+Industrial robotic smart picking platform powered by AI.
 
 Target: Jetson Orin NX touchscreen, 1920x1080.
 
@@ -193,6 +193,19 @@ CSS = b"""
 .status-ok     { color: #3BD89C; font-size: 13px; font-weight: bold; }
 .status-warn   { color: #E0A33D; font-size: 13px; font-weight: bold; }
 .camera-note   { color: #8A94A3; font-size: 12px; }
+
+/* ---- object selector ---- */
+combobox button, combobox button.combo {
+    background-color: #13191F;
+    border: 1px solid #2E3946;
+    border-radius: 8px;
+    color: #E6EAF0;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 8px 12px;
+    box-shadow: none;
+}
+combobox button:hover { background-color: #1A2430; }
 """
 
 
@@ -440,7 +453,7 @@ def icon(name, px, css="nav-icon"):
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
-class BanaPickLiveWindow(Gtk.Window):
+class EbzerAILiveWindow(Gtk.Window):
     TABS = [
         ("Live",       "camera-video-symbolic"),
         ("Cameras",    "camera-photo-symbolic"),
@@ -460,7 +473,7 @@ class BanaPickLiveWindow(Gtk.Window):
     ]
 
     def __init__(self, camera_ip="192.168.1.101"):
-        super().__init__(title="BanaPick — Live")
+        super().__init__(title="Ebzer AI — Live")
         self.camera_ip = camera_ip
         self._running = True
         self._camera_running = True
@@ -549,9 +562,9 @@ class BanaPickLiveWindow(Gtk.Window):
 
         logo = Gtk.Box(spacing=8)
         logo.set_valign(Gtk.Align.CENTER)
-        logo.pack_start(lbl("Bana", "logo"), False, False, 0)
-        l2 = lbl("Pick", "logo-accent"); logo.pack_start(l2, False, False, 0)
-        logo.pack_start(lbl("CELL A-03", "cell-id"), False, False, 6)
+        logo.pack_start(lbl("Ebzer", "logo"), False, False, 0)
+        l2 = lbl(" AI", "logo-accent"); logo.pack_start(l2, False, False, 0)
+        logo.pack_start(lbl("VISION CELL A-03", "cell-id"), False, False, 6)
         bar.pack_start(logo, False, False, 6)
 
         self.status_pill = Gtk.Box(spacing=8)
@@ -625,7 +638,7 @@ class BanaPickLiveWindow(Gtk.Window):
                 ("WORKSPACE", [("Min Z", "50 mm"), ("Max Z", "4000 mm"), ("Frame", "camera")], "LOCKED"),
             ],
             "Detection": [
-                ("AI MODEL", [("Detector", "banana-hand pose"), ("Crown/tip", "2 keypoints"), ("Confidence", "0.88")], "RUNNING"),
+                ("AI MODEL", [("Detector", "Ebzer AI pose"), ("Keypoints", "2 puntos"), ("Confidence", "0.88")], "RUNNING"),
                 ("SEGMENTATION", [("Plane", "RANSAC"), ("Clusters", "DBSCAN"), ("Rejects", "3 today")], "ACTIVE"),
                 ("QUALITY", [("Stem up", "green"), ("Stem down", "amber"), ("Bruising", "watch")], "WATCH"),
             ],
@@ -689,22 +702,45 @@ class BanaPickLiveWindow(Gtk.Window):
         col.pack_start(self._stepper_col(), True, True, 0)
         return col
 
+    # Objects available for picking: (display_name, model_id, description)
+    PICK_OBJECTS = [
+        ("Mano de Banana",  "banana-hand-pose-v1",  "target: crown point + tip point + stem orientation"),
+        ("Pelota Naranja",  "orange-ball-hsv-v1",   "target: centroid XYZ — HSV color detection"),
+        ("Caja Rectangular","box-rect-ransac-v1",   "target: top-face centroid — RANSAC plane fit"),
+    ]
+
     def _model_card(self):
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         card.get_style_context().add_class("card")
         card.set_border_width(14)
 
         head = Gtk.Box()
-        head.pack_start(lbl("DETECTION MODEL", "section-title"), False, False, 0)
+        head.pack_start(lbl("OBJETO A PICAR", "section-title"), False, False, 0)
         head.pack_start(Gtk.Box(), True, True, 0)
-        head.pack_start(lbl("ACTIVE", "status-ok"), False, False, 0)
+        self._obj_status_lbl = lbl("ACTIVO", "status-ok")
+        head.pack_start(self._obj_status_lbl, False, False, 0)
         card.pack_start(head, False, False, 0)
 
-        self._model_status_label = lbl("banana-hand-pose-v1", "row-value")
-        self._part_status_label = lbl("target: crown point + tip point + stem orientation", "camera-note")
+        # Dropdown selector
+        self._obj_combo = Gtk.ComboBoxText()
+        for name, _mid, _desc in self.PICK_OBJECTS:
+            self._obj_combo.append_text(name)
+        self._obj_combo.set_active(0)
+        self._obj_combo.connect("changed", self._on_object_changed)
+        card.pack_start(self._obj_combo, False, False, 0)
+
+        self._model_status_label = lbl(self.PICK_OBJECTS[0][1], "row-value")
+        self._part_status_label  = lbl(self.PICK_OBJECTS[0][2], "camera-note")
         card.pack_start(self._model_status_label, False, False, 0)
-        card.pack_start(self._part_status_label, False, False, 0)
+        card.pack_start(self._part_status_label,  False, False, 0)
         return card
+
+    def _on_object_changed(self, combo):
+        idx = combo.get_active()
+        if 0 <= idx < len(self.PICK_OBJECTS):
+            _, model_id, desc = self.PICK_OBJECTS[idx]
+            self._model_status_label.set_text(model_id)
+            self._part_status_label.set_text(desc)
 
     def _camera_col(self):
         col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -1340,7 +1376,7 @@ def main():
         Gdk.Screen.get_default(), prov,
         Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-    win = BanaPickLiveWindow(camera_ip)
+    win = EbzerAILiveWindow(camera_ip)
     win.show_all()
     Gtk.main()
 

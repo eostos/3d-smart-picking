@@ -1,4 +1,4 @@
-"""BanaPick desktop application package."""
+"""Ebzer AI desktop application package."""
 
 __all__ = ["__version__"]
 

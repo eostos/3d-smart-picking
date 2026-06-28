@@ -1,9 +1,9 @@
-# BanaPick — Industrial Robotic Smart Picking Platform
+# Ebzer AI — Industrial Robotic Smart Picking Platform
 
-Aplicación de escritorio GTK3 para una plataforma industrial de **banana hand smart picking** con cámara ToF Scepter/Vzense, panel de operador touchscreen para Jetson Orin NX, detección 3D y simulación de pick robótico.
+Aplicación de escritorio GTK3 para una plataforma industrial de **smart picking** con cámara ToF Scepter/Vzense, panel de operador touchscreen para Jetson Orin NX, detección 3D y simulación de pick robótico.
 
 ```
-BanaPick LIVE UI → Cámara 3D → Detección → Posición XYZ → Robot / PyBullet
+Ebzer AI LIVE UI → Cámara 3D → Detección → Posición XYZ → Robot / PyBullet
 ```
 
 ---
@@ -21,7 +21,7 @@ BanaPick LIVE UI → Cámara 3D → Detección → Posición XYZ → Robot / PyB
 ## Arquitectura del software
 
 ```
-BanaPick/
+Ebzer AI/
   banapick.py              ← launcher oficial de la app de operador
   banapick/
     __main__.py            ← permite ejecutar: python3 -m banapick
@@ -42,7 +42,7 @@ examples/
     robot.py            ← MockRobot / TcpRobot (protocolo JSON)
 ```
 
-`banapick.py` es la app principal que debes abrir para ver el panel industrial BanaPick.  
+`banapick.py` es la app principal que debes abrir para ver el panel industrial Ebzer AI.  
 `examples/ball_viewer.py` y `examples/smart_pick.py` quedan como herramientas técnicas para cámara real, calibración, pruebas de nube 3D y robot.
 
 ### Por qué `PYTHONNOUSERSITE=1`
@@ -145,7 +145,7 @@ mkdir -p captures
 
 ## Uso
 
-### App principal BanaPick LIVE
+### App principal Ebzer AI LIVE
 
 ```bash
 cd /home/ebenezer/Documents/3d-camera
@@ -163,7 +163,7 @@ Esta pantalla abre el panel industrial y conecta el LIVE tab con la cámara real
 | Zona | Contenido |
 |---|---|
 | Sidebar | Live, Cameras, Calibration, Detection, Robot, Routing, Log / DB; cada pestaña cambia de vista |
-| Top bar | Logo BanaPick, estado RUNNING/STOPPED, E-STOP, Reconnect y hora actual |
+| Top bar | Logo Ebzer AI, estado RUNNING/STOPPED, E-STOP, Reconnect y hora actual |
 | Columna izquierda | Dos visores simultáneos: RGB real y Depth/3D; badges STEM UP / STEM DOWN |
 | Columna central | Modelo activo, parte objetivo y stepper operativo con done/active/alarm/idle |
 | Columna derecha | Box fill 4×3, contador 8 / 12, progreso y alerta |
@@ -185,7 +185,7 @@ Esta pantalla abre el panel industrial y conecta el LIVE tab con la cámara real
 
 **Referencia de altura/XYZ:**
 
-Al hacer click, BanaPick muestra `X/Y/Z` en milímetros usando el frame de la cámara ToF:
+Al hacer click, Ebzer AI muestra `X/Y/Z` en milímetros usando el frame de la cámara ToF:
 
 | Valor | Referencia |
 |---|---|
